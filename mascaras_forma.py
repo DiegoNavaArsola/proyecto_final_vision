@@ -49,7 +49,7 @@ def paste_mask(img_original, img_mask):
     img_plus_mask = cv2.addWeighted(img_original, 1, img_mask, alpha, 0)
     return img_plus_mask
 
-def detectar_contornos_y_areas(image):
+def detect_areas(image):
     # Detectar contornos
     contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -82,7 +82,7 @@ def detectar_contornos_y_areas(image):
 
     return output_image, areas
 
-def encontrar_contorno_por_area(img, target_area_min, target_area_max, tolerance=50):
+def find_contopurs_per_area(img, target_area_min, target_area_max, tolerance=50):
 
     # Estatus de busqueda por área
     status = False
@@ -200,11 +200,11 @@ if __name__ == "__main__":
             save_image_dir(img_mask, file, "_region", ".png", output_dir_mask)
 
             # Selección de contornos y cálculos de area
-            img_areas, areas = detectar_contornos_y_areas(img_section)
+            img_areas, areas = detect_areas(img_section)
             save_image_dir(img_areas, file, "_area", ".png", output_dir_area)
 
             # Área principal
-            segment, selected_contour, status_area = encontrar_contorno_por_area(img_section, min_area, max_area, 50)
+            segment, selected_contour, status_area = find_contopurs_per_area(img_section, min_area, max_area, 50)
             save_image_dir(segment, file, "_segmentado", ".png", output_dir_segmento)
 
             # Comparación de forma
