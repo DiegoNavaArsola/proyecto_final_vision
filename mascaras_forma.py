@@ -212,9 +212,9 @@ if __name__ == "__main__":
             if status_form:
                 save_image_dir(mask_borders,file,"_forma_similar",".png",output_dir_similar)
 
-            # Máscara de área sobre imagen
-            img_con_mascara_area = paste_mask(img, segment)
-            save_image_dir(img_con_mascara_area,file,'_imagen_segmentada',".png",output_dir_final)
+                # Máscara de área sobre imagen
+                img_con_mascara_area = paste_mask(img, segment)
+                save_image_dir(img_con_mascara_area,file,'_imagen_segmentada',".png",output_dir_final)
 
 
             print(f"Imagen {file} -> Correcto")
