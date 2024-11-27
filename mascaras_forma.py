@@ -3,23 +3,31 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 
-def remove_background(img, output_path):
+def isolate_image_mask(image, mask):
+    # Aplicar la máscara directamente a la imagen
+    result = cv2.bitwise_and(image, image, mask=mask)
+    return result
+
+def remove_background(img, invert):
 
     imagen_filtrada = cv2.bilateralFilter(img, d=25, sigmaColor=100, sigmaSpace=100)
 
     # Aplicar un umbral adaptativo para separar fondo y objeto
     _, binary = cv2.threshold(imagen_filtrada, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # Invertir la máscara binaria
-    #binary_inv = cv2.bitwise_not(binary)
-    binary_inv = binary
+    if invert:
+        #Invertir la máscara binaria
+        binary_inv = cv2.bitwise_not(binary)
+    else:
+        binary_inv = binary
+
 
     # Aplicar operaciones morfológicas para eliminar ruido
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     binary_cleaned = cv2.morphologyEx(binary_inv, cv2.MORPH_CLOSE, kernel)
 
     # Aplicar la máscara limpia sobre la imagen original
-    foreground = cv2.bitwise_and(img, img, mask=binary_cleaned)
+    foreground = isolate_image_mask(img, binary_cleaned)
 
     #return foreground
     return cv2.equalizeHist(foreground)
@@ -116,14 +124,6 @@ def find_contopurs_per_area(img, target_area_min, target_area_max, tolerance=50)
     return region_of_interest, selected_contour, status
 
 def detect_similar_shapes(image, mask, similarity_threshold):
-    """
-       Detecta regiones en la imagen cuyo contorno sea similar al contorno de la máscara.
-
-       Args:
-       - image: Imagen binarizada de entrada (NumPy array, escala de grises).
-       - mask: Máscara binarizada (NumPy array, escala de grises).
-       - similarity_threshold: Umbral de similitud para determinar coincidencias (valor bajo = más estricto).
-       """
 
     status_form = False
 
@@ -158,44 +158,56 @@ def detect_similar_shapes(image, mask, similarity_threshold):
             break
     return image, image_result, status_form
 
+def draw_borders(img, minimum_threshold, maximum_threshold):
+
+    #img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY)
+
+    img_range = cv2.inRange(img, minimum_threshold, maximum_threshold)
+
+    contours, _ = cv2.findContours(img_range, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_TC89_L1)
+
+    img_borders = img.copy()
+    img_borders = cv2.cvtColor(img_borders, cv2.COLOR_GRAY2BGR)
+
+    cv2.drawContours(img_borders, contours, -1, (0,255,0), 1)
+
+    return img_borders
+
 def save_image_dir(img,file_name,suflix, format, output_dir):
     suflix_p_format = suflix + format
     output_filename = os.path.splitext(file_name)[0] + suflix_p_format
     output_filepath = os.path.join(output_dir, output_filename)
     cv2.imwrite(output_filepath, img)
 
-if __name__ == "__main__":
 
-    kernel_size = 7
+def detect_aorthic_valve(dir_path, bg_rem, invert, kernel_size, threshold, min_area, max_area, refrence_image, simil_threshold):
 
-    umbral = 200
-    min_area = 5300
-    max_area = 9300
-
-    mascara_patron = cv2.imread("Estudio_1_png/segmentacion/BOULLOSA-MADRAZO-ANTONIO.transformed147_segmentado.png", cv2.IMREAD_GRAYSCALE)
-    umbral_similitud = 0.04
-
-
-    input_dir_png = "Estudio_1_png"
-    output_dir_background = "Estudio_1_png/background_remove"
-    output_dir_mask = "Estudio_1_png/mascaras"
-    output_dir_area = "Estudio_1_png/area_principal"
-    output_dir_segmento = "Estudio_1_png/segmentacion"
-    output_dir_similar = "Estudio_1_png/forma_similar"
-    output_dir_final = "Estudio_1_png/resultado_final"
+    input_dir_png = dir_path
+    output_dir_background = input_dir_png + "/background_removal"
+    output_dir_mask = input_dir_png + "/mascaras"
+    output_dir_area = input_dir_png + "/area_principal"
+    output_dir_segmento = input_dir_png + "/segmentacion"
+    output_dir_similar = input_dir_png + "/forma_similar"
+    output_dir_final = input_dir_png + "/resultado_final"
 
     for file in os.listdir(input_dir_png):
         if file.lower().endswith('.png'):
 
             # Cargar la imagen
-            img = cv2.imread(input_dir_png+"/"+file, cv2.IMREAD_GRAYSCALE)
+            img = cv2.imread(input_dir_png + "/" + file, cv2.IMREAD_GRAYSCALE)
 
             # Quitar fondo
-            img_foreground = remove_background(img,None)
+            if bg_rem:
+                img_foreground = remove_background(img, invert)
+            else:
+                img_foreground = img
+
+
+            #img_foreground = cv2.equalizeHist(img)
             save_image_dir(img_foreground, file, "_foreground", ".png", output_dir_background)
 
             # Cierre para encontrár área de interés segun el umbral
-            img_section = opening_closing(img_foreground,umbral,kernel_size)
+            img_section = opening_closing(img_foreground, threshold, kernel_size)
             img_mask = paste_mask(img_foreground, img_section)
             save_image_dir(img_mask, file, "_region", ".png", output_dir_mask)
 
@@ -208,13 +220,90 @@ if __name__ == "__main__":
             save_image_dir(segment, file, "_segmentado", ".png", output_dir_segmento)
 
             # Comparación de forma
-            _, mask_borders, status_form = detect_similar_shapes(segment, mascara_patron, umbral_similitud)
+            _, mask_borders, status_form = detect_similar_shapes(segment, refrence_image, simil_threshold)
             if status_form:
-                save_image_dir(mask_borders,file,"_forma_similar",".png",output_dir_similar)
+                save_image_dir(mask_borders, file, "_forma_similar", ".png", output_dir_similar)
 
                 # Máscara de área sobre imagen
                 img_con_mascara_area = paste_mask(img, segment)
-                save_image_dir(img_con_mascara_area,file,'_imagen_segmentada',".png",output_dir_final)
+                img_region_aislada = isolate_image_mask(img, segment)
+                val_aorta_interno = draw_borders(img_region_aislada, 145, 160)
+                val_aorta_externo = draw_borders(img_region_aislada, 10, 255)
+                val_aorta_total = cv2.addWeighted(val_aorta_interno, 0.5, val_aorta_externo, 0.5, 0)
 
+                save_image_dir(val_aorta_total, file, '_imagen_segmentada', ".png", output_dir_final)
 
             print(f"Imagen {file} -> Correcto")
+
+if __name__ == "__main__":
+
+    """
+    Estudio 1
+    """
+    input_dir_png_1 = "Estudio_1_png"
+    kernel_size_1 = 7
+
+    umbral_1 = 200
+    min_area_1 = 5300
+    max_area_1 = 9300
+
+    mascara_patron_1 = cv2.imread("Estudio_1_png/Patron/patron_1.png", cv2.IMREAD_GRAYSCALE)
+    umbral_similitud_1 = 0.04
+
+    """detect_aorthic_valve(dir_path=input_dir_png_1,
+                         bg_rem=True,
+                         invert=False,    
+                         kernel_size=kernel_size_1,
+                         threshold=umbral_1,
+                         min_area=min_area_1,
+                         max_area=max_area_1,
+                         refrence_image=mascara_patron_1,
+                         simil_threshold=umbral_similitud_1)"""
+
+
+    """
+    Estudio 6
+    """
+    input_dir_png_6 = "Estudio_6_png"
+    kernel_size_6 = 7
+
+    umbral_6 = 220
+    min_area_6 = 2000
+    max_area_6 = 3000
+
+    mascara_patron_6 = cv2.imread("Estudio_6_png/segmentacion/301_134_segmentado.png", cv2.IMREAD_GRAYSCALE)
+
+    umbral_similitud_6 = 0.035
+
+    detect_aorthic_valve(dir_path=input_dir_png_6,
+                         bg_rem=False,
+                         invert=True,
+                         kernel_size=kernel_size_6,
+                         threshold=umbral_6,
+                         min_area=min_area_6,
+                         max_area=max_area_6,
+                         refrence_image=mascara_patron_6,
+                         simil_threshold=umbral_similitud_6)
+
+    """
+    Estudio 12
+    """
+    input_dir_png_12 = "Estudio_12_png"
+    kernel_size_12 = 7
+
+    umbral_12 = 220
+    min_area_12 = 2000
+    max_area_12 = 3000
+
+    mascara_patron_12 = cv2.imread("Estudio_6_png/segmentacion/301_134_segmentado.png", cv2.IMREAD_GRAYSCALE)
+    umbral_similitud_12 = 0.035
+
+    """detect_aorthic_valve(dir_path=input_dir_png_12,
+                         bg_rem=False,
+                         invert=True,
+                         kernel_size=kernel_size_12,
+                         threshold=umbral_12,
+                         min_area=min_area_12,
+                         max_area=max_area_12,
+                         refrence_image=mascara_patron_12,
+                         simil_threshold=umbral_similitud_12)"""
