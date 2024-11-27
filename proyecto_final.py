@@ -186,7 +186,6 @@ def save_image_dir(img,file_name,suflix, format, output_dir):
     # Guarda imagen en la ruta
     cv2.imwrite(output_filepath, img)
 
-
 def detect_aorthic_valve(dir_path, bg_rem, invert, kernel_size, threshold, min_area, max_area, refrence_image, simil_threshold):
 
     # Definición de rutas
@@ -198,6 +197,7 @@ def detect_aorthic_valve(dir_path, bg_rem, invert, kernel_size, threshold, min_a
     output_dir_segmento = input_dir_png + "/segmentacion"
     output_dir_similar = input_dir_png + "/forma_similar"
     output_dir_final = input_dir_png + "/resultado_final"
+    output_dir_original_valve = input_dir_png + "/original_valvula"
 
     for file in os.listdir(input_dir_png):
         if file.lower().endswith('.png'):
@@ -239,6 +239,10 @@ def detect_aorthic_valve(dir_path, bg_rem, invert, kernel_size, threshold, min_a
                 val_aorta_total = cv2.addWeighted(val_aorta_interno, 0.5, val_aorta_externo, 0.5, 0)
 
                 save_image_dir(val_aorta_total, file, '_imagen_segmentada', ".png", output_dir_final)
+
+                # Mascara con bordes de valvula
+                img_original_valvula = cv2.addWeighted(cv2.cvtColor(img,cv2.COLOR_GRAY2BGR), 0.5, val_aorta_total, 0.2, 0)
+                save_image_dir(img_original_valvula, file, '_original_valvula', ".png", output_dir_original_valve)
 
             print(f"Imagen {file} -> Correcto")
 
